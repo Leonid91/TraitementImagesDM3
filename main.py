@@ -39,13 +39,15 @@ def SIFT():
     cv2.drawKeypoints(img, train_keypoints, keypoints_without_size, color = (0, 255, 0))
     cv2.drawKeypoints(img, train_keypoints, keypoints_with_size, flags = cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 
-    fx, plots = plt.subplots(1, 2, figsize=(20,10))
+    #fx, plots = plt.subplots(1, 2, figsize=(20,10))
 
-    plots[0].set_title("Points d'intérêts \"With Size\"")
-    plots[0].imshow(keypoints_with_size, cmap='gray')
+    ##plots[0].set_title("Points d'intérêts \"With Size\"")
+    ##plots[0].imshow(keypoints_with_size, cmap='gray')
 
-    plots[1].set_title("Train keypoints \"Without Size\"")
-    plots[1].imshow(keypoints_without_size, cmap='gray')
+    #plots[1].set_title("Train keypoints \"Without Size\"")
+    #plots[1].imshow(keypoints_without_size, cmap='gray')
+
+    plt.imshow(keypoints_without_size, 'gray'),plt.show()
 
     print("Nombre de points d'interets dans l'image: ", len(train_keypoints))
     print("Nombre de points d'interets dans le fragment: ", len(test_keypoints))
@@ -61,7 +63,7 @@ def SIFT():
     print("\nNombre de points de correspondance avec le fragment : ", len(matches))
 
     best_matches = []
-    for i in range(0,100):
+    for i in range(0,25):
         best_matches.append(matches[i])
 
     result = cv2.drawMatches(img, train_keypoints, frag_gray, test_keypoints, best_matches, frag_gray, flags = 2)
@@ -71,6 +73,22 @@ def SIFT():
     plt.title('Best Matching Points')
     plt.imshow(result)
     plt.show()
+
+    return train_keypoints, test_keypoints, best_matches
+
+def findHomography(img_kp, frag_kp, matches):
+    img_points = np.zeros((len(matches), 1, 2), dtype=np.float32)
+    frag_points = np.zeros((len(matches), 1, 2), dtype=np.float32)
+
+    for i in range(0,len(matches)):
+        img_points[i] = img_kp[matches[i].queryIdx].pt
+        frag_points[i] = frag_kp[matches[i].trainIdx].pt
+
+
+    homography, mask = cv2.findHomography(img_points, frag_points, cv2.RANSAC, ransacReprojThreshold=2.0)
+
+    return homography, mask
+
 
 #data - un ensemble d'observations
 #modele - un modèle qui peut être ajusté à des données
@@ -124,9 +142,19 @@ frag_gray = cv2.cvtColor(frag, cv2.COLOR_RGB2GRAY)
 #plots[1].set_title("Testing Image")
 #plots[1].imshow(frag)
 
-#Decommenter pour SIFT
-#SIFT()
+#Decommenter pour SIFT ou Shi Tomasi
+img_kp, frag_kp, best_matches = SIFT()
+#ShiTomasi()
 
-#Decommenter pour le Thomasi
-ShiTomasi()
+#RANSAC
+homography, mask = findHomography(img_kp, frag_kp, best_matches)
 
+matchesMask = mask.ravel().tolist()
+h,w,d = frag.shape
+pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+dst = cv2.perspectiveTransform(pts,homography)
+
+img = cv2.polylines(img,[np.int32(dst)],True,255,3, cv2.LINE_AA)
+
+img3 = cv2.drawMatches(img,img_kp,frag,frag_kp, best_matches, None, (0,255,0), None, matchesMask, 2)
+plt.imshow(img3, 'gray'),plt.show()
